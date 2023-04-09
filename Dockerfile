@@ -16,10 +16,9 @@ RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 20
 
 RUN pip install conan
 
-WORKDIR /home
-RUN conan --version
-
 # dotenv-cpp
+# This is a very simple library that wraps around functions provided
+# In the standard library for accessing .env files.
 WORKDIR /home
 RUN rm -rf dotenv-cpp
 RUN git clone --depth 1 --branch master https://github.com/laserpants/dotenv-cpp.git
@@ -29,6 +28,40 @@ WORKDIR /home/dotenv-cpp/build
 RUN cmake ..
 RUN make
 RUN make install
+
+# pegtl parser library
+WORKDIR /home
+RUN rm -rf pegtl
+RUN git clone --depth 1 --branch master git@github.com:taocpp/PEGTL.git
+RUN mkdir build
+WORKDIR /home/PEGTL/build
+RUN cmake ..
+RUN make
+RUN make install
+
+#secp256k1
+WORKDIR /home
+RUN rm -rf secp256k1
+RUN git clone --depth 1 --branch master https://github.com/Gigamonkey-BSV/secp256k1.git
+WORKDIR /home/secp256k1
+RUN conan install .
+RUN CONAN_CPU_COUNT=1 conan create . proofofwork/stable
+
+#data
+WORKDIR /home
+RUN rm -rf data
+RUN git clone --depth 1 --branch sessions https://github.com/DanielKrawisz/data.git
+WORKDIR /home/data
+RUN conan install .
+RUN CONAN_CPU_COUNT=1 conan create . proofofwork/stable
+
+#gigamonkey
+WORKDIR /home
+RUN rm -rf Gigamonkey
+RUN git clone --depth 1 --branch sessions https://github.com/Gigamonkey-BSV/Gigamonkey.git
+WORKDIR /home/Gigamonkey
+RUN conan install .
+RUN CONAN_CPU_COUNT=1 conan create . proofofwork/stable
 
 COPY . /home/node
 WORKDIR /home/node

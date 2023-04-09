@@ -4,11 +4,19 @@
 
 namespace Cosmos {
 
-    const char *Help = "help message here";
+    const char *Help =
+        "\tThis is a template for building c++ programs. "
+        "\n\tThe program first checks for --help or --version options. "
+        "If these are not given, it looks for an environment file by default named .env or whatever is given in "
+        "option --env. In then searches for options, first in the command line and then in the env file, if one "
+        "was found."
+        "\n\tIt then searches for a postgres database url to connect to given by option \"db_url\". If one is "
+        "found, it tries to connect to the database."
+        "\n\tIt searches for option \"http_listener_port\". If an option is found, an HTTP server is started on "
+        "the given port."
+        "\n\tThe command line becomes a calculator app.";
 
     const char *Version = "version 0.0.0";
-
-    void run (const program_options &);
 
 }
 
@@ -18,25 +26,45 @@ int main (int arg_count, char ** arg_values) {
 
     command_line_parser.parse (arg_count, arg_values);
 
-    if (command_line_parser[{"--version"}]) std::cout << Cosmos::Version << "\n" << Cosmos::Help << std::endl;
-    else if (command_line_parser[{"--help"}]) std::cout << Cosmos::Help << std::endl;
+    // display version.
+    if (command_line_parser[{"--version"}]) std::cout << Cosmos::Version << std::endl;
+    // display help.
+    else if (command_line_parser[{"--help"}]) std::cout << Cosmos::Version << "\n" << Cosmos::Help << std::endl;
+    // otherwise, run the program normally.
     else
         try {
             run (Cosmos::program_options::read (command_line_parser));
         } catch (std::exception &exception) {
-            std::cout << "could not read program options: " << exception.what () << std::endl;
-            return 1;
-        } catch (...) {
+            std::cerr << exception.what () << std::endl;
             return 1;
         }
 
     return 0;
 }
 
-void Cosmos::run (const program_options &options) {
-    while (true) {
-        string command;
-        std::getline (std::cin, command);
-        std::cout << "read command " << command << std::endl;
+#include "postgres.hpp"
+#include "calc.hpp"
+
+namespace Cosmos {
+
+    void run (const program_options &opts) {
+
+        // try to connect to database
+        /*if (opts.DatabaseURL) {
+
+            std::cout << "database url: " << *opts.DatabaseURL << std::endl;
+
+            ptr<pqxx::connection> connection = connect_to_database (*opts.DatabaseURL);
+
+            if (connection->is_open ()) {
+                std::cout << "Connected to the database!" << std::endl;
+                connection->close ();
+            } else {
+                std::cout << "Cannot connect to the database." << std::endl;
+            }
+        }*/
+
+
+
     }
 }

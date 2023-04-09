@@ -1,12 +1,12 @@
 #ifndef NODE_TYPES
 #define NODE_TYPES
 
-#include <string>
+#include <data/tools.hpp>
 
 namespace Cosmos {
-    template <typename X> using string_of = std::basic_string<X>;
+    using namespace data;
 
-    using string = string_of<char>;
+    // put stuff here that will hold throughout the program.
 }
 
 #endif

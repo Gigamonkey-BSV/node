@@ -1,5 +1,5 @@
 #include "program_options.hpp"
-#include "dotenv.h"
+// #include "dotenv.h"
 
 namespace Cosmos {
 
@@ -11,12 +11,12 @@ namespace Cosmos {
 
             return option_value;
         }
-
+/*
         char *val = std::getenv (option.c_str ());
 
-        if (val == nullptr) return {};
+        if (val == nullptr)*/ return {};/*
         std::cout << "read option " << option << " from env: " << val << std::endl;
-        return string {val};
+        return string {val};*/
     }
 
     // same as above, except return default value if no option is found in either case.
@@ -27,22 +27,22 @@ namespace Cosmos {
 
     const program_options program_options::read (const argh::parser &command_line) {
 
-        string env_path;
+        //string env_path;
 
-        if (auto option = command_line ("--env", ".env"); option) option >> env_path;
+        //if (auto option = command_line ("--env", ".env"); option) option >> env_path;
 
         // it's not an error if this fails.
-        std::cout << "looking for env in " << env_path << std::endl;
-        dotenv::init (env_path.c_str ());
+        //std::cout << "looking for env in " << env_path << std::endl;
+        //dotenv::init (env_path.c_str ());
 
         program_options options {};
 
-        maybe<string> database_url = get_option (command_line, "db_url");
+        /*maybe<string> database_url = get_option (command_line, "db_url");
 
         if (database_url) {
             *options.DatabaseURL = postgres_URL {*database_url};
             //if (!options.DatabaseURL->valid ()) throw exception {} << "could not read database URL \"" << *database_url << "\"";
-        }
+        }*/
 
         maybe<string> http_listener_port = get_option (command_line, "http_listener_port");
 

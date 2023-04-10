@@ -8,7 +8,7 @@ namespace calc {
 
     // Define grammar rules for parsing arithmetic expressions
     struct number : plus<digit> {};
-    struct symbol : seq<sor<alpha, one<'_'>>, star<sor<alnum, one<'_'>>> {};
+    struct symbol : seq<sor<alpha, one<'_'>>, star<sor<alnum, one<'_'>>>> {};
 
     struct open_paren : one<'('> {};
     struct close_paren : one<')'> {};
@@ -43,7 +43,7 @@ namespace calc {
         expression
     > {};
 
-    struct grammar : must<expression, whitespace, one<';'> {};
+    struct grammar : must<expression, whitespace, one<';'>> {};
 }
 
 namespace Cosmos {

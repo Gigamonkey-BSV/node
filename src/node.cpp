@@ -42,7 +42,6 @@ int main (int arg_count, char ** arg_values) {
     return 0;
 }
 
-#include "postgres.hpp"
 #include "calc.hpp"
 
 namespace Cosmos {
@@ -50,6 +49,8 @@ namespace Cosmos {
     void run (const program_options &opts) {
 
         // try to connect to database
+        // we don't do anything with the database so we just
+        // forget about it after words.
         /*if (opts.DatabaseURL) {
 
             std::cout << "database url: " << *opts.DatabaseURL << std::endl;

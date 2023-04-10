@@ -37,12 +37,12 @@ namespace Cosmos {
 
         program_options options {};
 
-        /*maybe<string> database_url = get_option (command_line, "db_url");
+        maybe<string> database_url = get_option (command_line, "db_url");
 
         if (database_url) {
             *options.DatabaseURL = postgres_URL {*database_url};
-            //if (!options.DatabaseURL->valid ()) throw exception {} << "could not read database URL \"" << *database_url << "\"";
-        }*/
+            if (!options.DatabaseURL->valid ()) throw exception {} << "could not read database URL \"" << *database_url << "\"";
+        }
 
         maybe<string> http_listener_port = get_option (command_line, "http_listener_port");
 

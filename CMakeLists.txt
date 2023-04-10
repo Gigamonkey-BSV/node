@@ -19,7 +19,7 @@ add_definitions ("-DHAS_BOOST")
 
 add_executable (node
   src/node.cpp
-#  src/postgres.cpp
+  src/postgres.cpp
   src/program_options.cpp
   src/calc.cpp)
 

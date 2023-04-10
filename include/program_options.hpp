@@ -1,7 +1,7 @@
 #ifndef NODE_PROGRAM_OPTIONS
 #define NODE_PROGRAM_OPTIONS
 
-// #include "postgres.hpp"
+#include "postgres.hpp"
 #include "argh.h"
 #include <types.hpp>
 
@@ -10,7 +10,7 @@ namespace Cosmos {
     struct program_options {
         static const program_options read (const argh::parser &);
 
-        //maybe<postgres_URL> DatabaseURL {};
+        maybe<postgres_URL> DatabaseURL {};
 
         maybe<uint16> HTTPListenerPort {};
 

@@ -1,5 +1,5 @@
 #include "program_options.hpp"
-// #include "dotenv.h"
+#include <dotenv.h>
 
 namespace Cosmos {
 
@@ -11,12 +11,12 @@ namespace Cosmos {
 
             return option_value;
         }
-/*
+
         char *val = std::getenv (option.c_str ());
 
-        if (val == nullptr)*/ return {};/*
+        if (val == nullptr) return {};
         std::cout << "read option " << option << " from env: " << val << std::endl;
-        return string {val};*/
+        return string {val};
     }
 
     // same as above, except return default value if no option is found in either case.
@@ -27,13 +27,19 @@ namespace Cosmos {
 
     const program_options program_options::read (const argh::parser &command_line) {
 
-        //string env_path;
+        string env_path;
 
-        //if (auto option = command_line ("--env", ".env"); option) option >> env_path;
+        if (auto option = command_line ("--env", ".env"); option) {
+            option >> env_path;
+        } else {
+            env_path = ".env";
+            std::cout << "No option --env provided in command line options." << std::endl;
+        }
+
+        std::cout << "searching for env file at " << env_path << std::endl;
 
         // it's not an error if this fails.
-        //std::cout << "looking for env in " << env_path << std::endl;
-        //dotenv::init (env_path.c_str ());
+        dotenv::init (env_path.c_str ());
 
         program_options options {};
 
@@ -42,7 +48,7 @@ namespace Cosmos {
         if (database_url) {
             *options.DatabaseURL = postgres_URL {*database_url};
             if (!options.DatabaseURL->valid ()) throw exception {} << "could not read database URL \"" << *database_url << "\"";
-        }
+        } else std::cout << "No database URL found. Use option --db_url to specify a postgres database to connect to." << std::endl;
 
         maybe<string> http_listener_port = get_option (command_line, "http_listener_port");
 
@@ -50,7 +56,7 @@ namespace Cosmos {
             std::stringstream ss {*http_listener_port};
             ss >> *options.HTTPListenerPort;
             if (*options.HTTPListenerPort == 0) throw exception {} << "invalid http listener port \"" << *http_listener_port << "\"";
-        }
+        } else std::cout << "No listener port found. Use option --http_listener_port to specify a port to listen on." << std::endl;
 
         return options;
 

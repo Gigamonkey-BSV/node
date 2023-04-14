@@ -6,81 +6,123 @@
 #include <iostream>
 
 #include "calc.hpp"
+#include <data/numbers.hpp>
 
 namespace Cosmos {
 
-    struct calculator_actions {
-        // Stack to store numbers and intermediate results
-        static std::stack<int> values;
+    namespace pegtl = tao::pegtl;
 
-        // Function to parse numbers
-        template <typename Input>
-        static void number(const Input& in)
-        {
-            values.push(std::stoi(in.string()));
+    struct evaluation {
+        stack<Q> Stack;
+
+        void read_symbol (const string &in) {
+            throw exception {} << "read symbol " << in;
         }
 
-        // Function to perform operations
-        template <char Op>
-        static void operation()
-        {
-            if (values.size() < 2)
-            {
-                throw std::runtime_error("Invalid expression");
-            }
+        void read_string (const string &in) {
+            throw exception {} << "read string literal " << in;
+        }
 
-            int b = values.top(); values.pop();
-            int a = values.top(); values.pop();
+        void read_number (const string &in) {
+            Stack <<= Q {Z {in}};
+        }
 
-            switch (Op)
-            {
-                case '+': values.push(a + b); break;
-                case '-': values.push(a - b); break;
-                case '*': values.push(a * b); break;
-                case '/': values.push(a / b); break;
-                case '%': values.push(a % b); break;
-                default: throw std::runtime_error("Unknown operation");
-            }
+        void mul () {
+            Stack = prepend (rest (rest (Stack)), first (Stack) * first (rest (Stack)));
+        }
+
+        void div () {
+            auto denominator = math::nonzero<Q> {first (Stack)};
+            if (!denominator.valid ()) throw exception {} << "division by zero";
+            Stack = prepend (rest (rest (Stack)), first (rest (Stack)) / denominator);
+        }
+
+        void plus () {
+            Stack = prepend (rest (rest (Stack)), first (Stack) + first (rest (Stack)));
+        }
+
+        void minus () {
+            Stack = prepend (rest (rest (Stack)), first (Stack) - first (rest (Stack)));
         }
     };
 
-    std::stack<int> calculator_actions::values;
+    template <typename Rule> struct eval_action : pegtl::nothing<Rule> {};
 
-    template <typename Rule>
-    using calculator_action = tao::pegtl::nothing<Rule>;
-/*
-    template <>
-    struct calculator_action<calc::number> : tao::pegtl::action_single<calculator_actions::number> {};
-
-    template <char Op>
-    struct calculator_action<tao::pegtl::one<Op>> : tao::pegtl::action_single<calculator_actions::operation<Op>> {};
-*/
-    int main(int argc, char** argv)
-    {
-        if (argc != 2)
-        {
-            std::cerr << "Usage: " << argv[0] << " <expression>" << std::endl;
-            return 1;
+    template <> struct eval_action<calc::number_lit> {
+        template <typename Input>
+        static void apply (const Input& in, evaluation &eval) {
+            eval.read_number (in.string ());
         }
+    };
 
-        try
-        {
-            tao::pegtl::memory_input<> input(argv[1], "expression");
-            tao::pegtl::parse<calc::grammar, calculator_action>(input);
+    template <> struct eval_action<calc::string_lit> {
+        template <typename Input>
+        static void apply (const Input& in, evaluation &eval) {
+            eval.read_string (in.string ());
+        }
+    };
 
-            if (calculator_actions::values.size() != 1)
-            {
-                throw std::runtime_error("Invalid expression");
+    template <> struct eval_action<calc::symbol> {
+        template <typename Input>
+        static void apply (const Input& in, evaluation &eval) {
+            eval.read_symbol (in.string ());
+        }
+    };
+
+    template <> struct eval_action<calc::mul_op> {
+        template <typename Input>
+        static void apply (const Input& in, evaluation &eval) {
+            eval.mul ();
+        }
+    };
+
+    template <> struct eval_action<calc::div_op> {
+        template <typename Input>
+        static void apply (const Input& in, evaluation &eval) {
+            eval.div ();
+        }
+    };
+
+    template <> struct eval_action<calc::add_op> {
+        template <typename Input>
+        static void apply (const Input& in, evaluation &eval) {
+            eval.plus ();
+        }
+    };
+
+    template <> struct eval_action<calc::sub_op> {
+        template <typename Input>
+        static void apply (const Input& in, evaluation &eval) {
+            eval.minus ();
+        }
+    };
+
+    std::ostream &write (std::ostream &o, const Q &q) {
+        o << q.Numerator;
+        if (q.Denominator != 1) o << "/" << q.Denominator;
+        return o;
+    }
+
+    void calc () {
+        std::string input_str;
+        std::cout << "calculator app engaged." << std::endl;
+        while (true) {
+            std::cout << "  input: ";
+
+            if (!std::getline (std::cin, input_str)) break;
+            if (input_str.empty ()) continue;
+
+            try {
+                tao::pegtl::memory_input<> input (input_str, "expression");
+                evaluation eval {};
+                tao::pegtl::parse<calc::grammar, eval_action> (input, eval);
+
+                write (std::cout << " result: ", eval.Stack.first ()) << std::endl;
+
+            } catch (const std::exception& ex) {
+                std::cerr << "Error: " << ex.what () << std::endl;
             }
-
-            std::cout << "Result: " << calculator_actions::values.top() << std::endl;
-        }
-        catch (const std::exception& ex)
-        {
-            std::cerr << "Error: " << ex.what() << std::endl;
-            return 1;
         }
 
-        return 0;
     }
 }

@@ -3,6 +3,7 @@
 
 #include "postgres.hpp"
 #include "argh.h"
+#include <libconfig.h++>
 #include <types.hpp>
 
 namespace Cosmos {

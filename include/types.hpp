@@ -2,6 +2,7 @@
 #define NODE_TYPES
 
 #include <data/tools.hpp>
+#include <data/net/URL.hpp>
 
 namespace Cosmos {
     using namespace data;

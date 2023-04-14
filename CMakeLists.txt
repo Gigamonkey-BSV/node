@@ -7,29 +7,28 @@ project (node CXX)
 
 set (CONAN_DISABLE_CHECK_COMPILER ON)
 
+
 find_package (Boost CONFIG REQUIRED)
 find_package (data CONFIG REQUIRED)
 find_package (pegtl CONFIG REQUIRED)
 find_package (argh CONFIG REQUIRED)
-# find_package (libpqxx CONFIG REQUIRED)
 find_package (nlohmann_json CONFIG REQUIRED)
-# find_package (laserpants_dotenv CONFIG REQUIRED)
+find_package (laserpants_dotenv CONFIG REQUIRED)
 
 add_definitions ("-DHAS_BOOST")
 
 add_executable (node
   src/node.cpp
+  src/calc.cpp
   src/postgres.cpp
-  src/program_options.cpp
-  src/calc.cpp)
+  src/program_options.cpp)
 
 target_link_libraries (node PUBLIC
   boost::boost
-  data::data
-#  laserpants::dotenv
-  nlohmann_json::nlohmann_json
   argh
-#  libpqxx
+  laserpants::dotenv
+  data::data
+  nlohmann_json::nlohmann_json
   taocpp::pegtl)
 
 target_include_directories (node PUBLIC include)

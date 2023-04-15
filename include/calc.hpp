@@ -40,19 +40,22 @@ namespace calc {
 
     struct comp_operator : sor<string<'<','='>, string<'>','='>, string<'=','='>, string<'!','='>, one<'>'>, one<'<'>> {};
 
-    struct unary_expr : sor<seq<unary_operator, ws, unary_expr>, factor> {};
-
+    struct unary_expr;
     struct mul_expr;
     struct div_expr;
     struct sub_expr;
     struct add_expr;
     struct comp_expr;
 
+    struct unary_op : seq<unary_operator, ws, unary_expr> {};
+
     struct mul_op : seq<ws, sor<one<'*'>, one<'%'>, one<'~'>>, ws, mul_expr> {};
     struct div_op : seq<ws, one<'/'>, ws, div_expr> {};
     struct sub_op : seq<ws, one<'-'>, ws, sub_expr> {};
     struct add_op : seq<ws, one<'+'>, ws, add_expr> {};
     struct comp_op : seq<ws, comp_operator, comp_expr> {};
+
+    struct unary_expr : sor<unary_op, factor> {};
 
     struct mul_expr : seq<unary_expr, opt<mul_op>> {};
     struct div_expr : seq<mul_expr, opt<div_op>> {};

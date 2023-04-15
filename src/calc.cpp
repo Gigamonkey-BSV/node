@@ -63,6 +63,10 @@ namespace Cosmos {
             Stack <<= value::number (Q {Z {in}});
         }
 
+        void negate () {
+            Stack = prepend (rest (Stack), value::number (-first (Stack).get (Vars)));
+        }
+
         void mul () {
             Stack = prepend (rest (rest (Stack)), value::number (first (rest (Stack)).get (Vars) * first (Stack).get (Vars)));
         }
@@ -110,6 +114,13 @@ namespace Cosmos {
         template <typename Input>
         static void apply (const Input& in, evaluation &eval) {
             eval.read_symbol (in.string ());
+        }
+    };
+
+    template <> struct eval_action<calc::unary_op> {
+        template <typename Input>
+        static void apply (const Input& in, evaluation &eval) {
+            eval.negate ();
         }
     };
 
@@ -169,7 +180,7 @@ namespace Cosmos {
 
     void calc () {
         std::string input_str;
-        std::cout << "calculator app engaged." << std::endl;
+        std::cout << "\nCalculator app engaged! The calculator app supports rational arithmetic. You can also set variables." << std::endl;
 
         std::map<string, value> vars;
 

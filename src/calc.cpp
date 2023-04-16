@@ -7,6 +7,7 @@
 
 #include "calc.hpp"
 #include <data/numbers.hpp>
+#include <data/for_each.hpp>
 #include <map>
 
 namespace Diophant {
@@ -14,17 +15,17 @@ namespace Diophant {
     using namespace data;
 
     struct expression;
-    using value = ptr<expression>;
+    using value = const ptr<const expression>;
 
-    struct expression {
+    struct expression : std::enable_shared_from_this<expression> {
 
         static value null ();
         static value boolean (bool b);
         static value rational (const data::Q &q);
         static value symbol (const data::string &x);
         static value string (const data::string &str);
-        static value list (const data::list<value> ls);
-        static value object (const data::list<data::entry<data::string, value>> x);
+        static value list (const data::list<value> &ls);
+        static value object (const data::list<data::entry<data::string, value>> &x);
 
         static value apply (const value, const value);
 
@@ -56,37 +57,52 @@ namespace Diophant {
 
         virtual std::ostream &write (std::ostream &) const = 0;
 
+        data::string write () const {
+            std::stringstream ss;
+            write (ss);
+            return ss.str ();
+        }
+
         virtual uint32 precedence () const {
             return 0;
         }
 
         virtual value evaluate (const std::map<data::string, value> &vars) const {
-            return *this;
+            return this->shared_from_this ();
         };
 
-        value virtual operator () const;
+        virtual value operator () (const value) const;
+        virtual value operator - () const;
+        virtual value operator ! () const;
+
+        virtual value operator + (const value) const;
+        virtual value operator - (const value) const;
+        virtual value operator * (const value) const;
+        virtual value operator / (const value) const;
+        virtual value operator ^ (const value) const;
+
+        virtual value operator == (const value) const;
+        virtual value operator != (const value) const;
+        virtual value operator <= (const value) const;
+        virtual value operator >= (const value) const;
+        virtual value operator < (const value) const;
+        virtual value operator > (const value) const;
+
+        virtual value operator && (const value) const;
+        virtual value operator || (const value) const;
+        virtual value arrow (const value) const;
+
+        virtual value operator & (const value) const;
+        virtual value operator | (const value) const;
+        virtual value implies (const value) const;
 
     };
 
-    value operator - (const value);
-    value operator + (const value, const value);
-    value operator - (const value, const value);
-    value operator * (const value, const value);
-    value operator ^ (const value, const value);
-    value operator / (const value, const value);
+    value evaluate (value v, const std::map<data::string, value> &vars);
 
-    value operator == (const value, const value);
-    value operator != (const value, const value);
-    value operator <= (const value, const value);
-    value operator >= (const value, const value);
-    value operator < (const value, const value);
-    value operator > (const value, const value);
-
-    value operator ! (const value);
-    value operator && (const value, const value);
-    value operator || (const value, const value);
-
-    value evaluate (const value v, const std::map<data::string, value> &vars);
+    std::ostream inline &operator << (std::ostream &o, value v) {
+        return v->write (o);
+    }
 
     struct evaluation {
         stack<value> Stack;
@@ -137,8 +153,6 @@ namespace Diophant {
 namespace Cosmos {
 
     namespace pegtl = tao::pegtl;
-
-    std::ostream &write (std::ostream &o, const Diophant::value &v);
 
     template <typename Rule> struct eval_action : pegtl::nothing<Rule> {};
 
@@ -312,7 +326,8 @@ namespace Cosmos {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             if (data::size (eval.Stack) == 1) {
-                write (std::cout << "\n result: ", evaluate (eval.Stack.first (), eval.Vars)) << std::endl;
+                auto v = evaluate (eval.Stack.first (), eval.Vars);
+                v->write (std::cout << "\n result: ") << std::endl;
                 eval.Stack = data::stack<Diophant::value> {};
             }
         }
@@ -347,6 +362,10 @@ namespace Diophant {
 
     void inline evaluation::mul () {
         Stack = prepend (rest (rest (Stack)), expression::times (first (rest (Stack)), first (Stack)));
+    }
+
+    void inline evaluation::pow () {
+        Stack = prepend (rest (rest (Stack)), expression::power (first (rest (Stack)), first (Stack)));
     }
 
     void inline evaluation::div () {
@@ -410,7 +429,7 @@ namespace Diophant {
     }
 
     value inline evaluate (const value v, const std::map<data::string, value> &vars) {
-        if (value == nullptr) return v;
+        if (v == nullptr) return v;
 
         return v->evaluate (vars);
     }
@@ -419,8 +438,24 @@ namespace Diophant {
         bool Value;
         boolean (const bool b) : Value {b} {}
 
-        std::ostream &write (std::ostream &o) override {
-            return << std::boolalpha << Value;
+        std::ostream &write (std::ostream &o) const override {
+            return o << std::boolalpha << Value;
+        }
+
+        value operator ! () const override {
+            return expression::boolean (!Value);
+        }
+
+        value operator && (value v) const override {
+            auto r = std::dynamic_pointer_cast<const boolean> (v);
+            if (r == nullptr) return this->shared_from_this ();
+            return expression::boolean (Value && r->Value);
+        }
+
+        value operator || (value v) const override {
+            auto r = std::dynamic_pointer_cast<const boolean> (v);
+            if (r == nullptr) return this->shared_from_this ();
+            return expression::boolean (Value || r->Value);
         }
     };
 
@@ -428,15 +463,15 @@ namespace Diophant {
         data::string Name;
         symbol (const data::string &x) : Name {x} {}
 
-        std::ostream &write (std::ostream &o) override {
-            return << Name;
+        std::ostream &write (std::ostream &o) const override {
+            return o << Name;
         }
 
         value evaluate (const std::map<data::string, value> &vars) const override {
-            auto x = vars.find (a->Name);
-            if (x == vars.end ()) throw exception {} << "undefined symbol " << a->Name;
+            auto x = vars.find (Name);
+            if (x == vars.end ()) throw exception {} << "undefined symbol " << Name;
 
-            return evaluate (x->second, vars);
+            return Diophant::evaluate (x->second, vars);
         };
     };
 
@@ -444,8 +479,8 @@ namespace Diophant {
         data::string Value;
         string (const data::string &x) : Value {x} {}
 
-        std::ostream &write (std::ostream &o) override {
-            return << "\"" << Value << "\"";
+        std::ostream &write (std::ostream &o) const override {
+            return o << "\"" << Value << "\"";
         }
     };
 
@@ -453,10 +488,38 @@ namespace Diophant {
         data::Q Value;
         rational (const data::Q &q) : Value {q} {}
 
-        std::ostream &write (std::ostream &o) override {
+        std::ostream &write (std::ostream &o) const override {
             o << Value.Numerator;
             if (Value.Denominator != 1) o << "/" << Value.Denominator;
             return o;
+        }
+
+        value operator - () const override {
+            return expression::rational (-Value);
+        }
+
+        value operator + (value v) const override {
+            auto r = std::dynamic_pointer_cast<const rational> (v);
+            if (r == nullptr) return this->shared_from_this ();
+            return expression::rational (Value + r->Value);
+        }
+
+        value operator - (value v) const override {
+            auto r = std::dynamic_pointer_cast<const rational> (v);
+            if (r == nullptr) return this->shared_from_this ();
+            return expression::rational (Value - r->Value);
+        }
+
+        value operator * (value v) const override {
+            auto r = std::dynamic_pointer_cast<const rational> (v);
+            if (r == nullptr) return this->shared_from_this ();
+            return expression::rational (Value * r->Value);
+        }
+
+        value operator / (value v) const override {
+            auto r = std::dynamic_pointer_cast<const rational> (v);
+            if (r == nullptr) return this->shared_from_this ();
+            return expression::rational (Value / math::nonzero<Q> (r->Value));
         }
     };
 
@@ -464,29 +527,45 @@ namespace Diophant {
         data::list<value> Value;
         list (data::list<value> v) : Value {v} {}
 
-        std::ostream &write (std::ostream &o) override {
+        std::ostream &write (std::ostream &o) const override {
             o << "[";
+
             if (!data::empty (Value)) {
-                write (o, first (Value));
-                for (const auto v : Value) write (o << ", ", v);
+                first (Value)->write (o);
+                for (const auto v : rest (Value)) v->write (o << ", ");
             }
+
             return o << "]";
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            data::list<value> vvvvvv;
+            for (value &v : Value) vvvvvv <<= Diophant::evaluate (v, vars);
+            return expression::list (vvvvvv);
+        };
     };
 
     struct object : expression {
         data::list<entry<data::string, value>> Value;
         object (data::list<entry<data::string, value>> v) : Value {v} {}
 
-        std::ostream &write (std::ostream &o) override {
+        std::ostream &write (std::ostream &o) const override {
             o << "{";
-            if (!data::empty (x)) {
-                auto e = first (x);
-                write (o << e.Key << ": ", e.Value);
-                for (const auto e : x) write (o << ", " << e.Key << ": ", e.Value);
+
+            if (!data::empty (Value)) {
+                auto e = first (Value);
+                e.Value->write (o << e.Key << ": ");
+                for (const auto e : rest (Value)) e.Value->write (o << ", " << e.Key << ": ");
             }
+
             return o << "}";
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            return expression::object (data::for_each ([&vars] (entry<data::string, value> v) -> entry<data::string, value> {
+                return entry<data::string, value> {v.Key, Diophant::evaluate (v.Value, vars)};
+            }, Value));
+        };
     };
 
     struct apply : expression {
@@ -498,13 +577,20 @@ namespace Diophant {
             return 100;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return (*a) (b);
+        };
     };
 
     struct negate : expression {
@@ -515,15 +601,17 @@ namespace Diophant {
             return 200;
         }
 
-        value evaluate (const std::map<data::string, value> &vars) const {
-            return -value->evaluate (vars);
-        };
-
-        std::ostream &write (std::ostream &o) override {
+        std::ostream &write (std::ostream &o) const override {
             o << "-";
-            if (Value->precedence () > precedence ()) o << "(" << Value->write () << ")";
-            else o << Value->write ();
+            if (Value->precedence () > precedence ()) return Value->write (o << "(") << ")";
+            else return Value->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto v = Diophant::evaluate (Value, vars);
+            if (v.get () == nullptr) return expression::negate (v);
+            return -(*v);
+        };
     };
 
     struct boolean_not : expression {
@@ -534,11 +622,17 @@ namespace Diophant {
             return 200;
         }
 
-        std::ostream &write (std::ostream &o) override {
+        std::ostream &write (std::ostream &o) const override {
             o << "!";
-            if (Value->precedence () > precedence ()) o << "(" << Value->write () << ")";
-            else o << Value->write ();
+            if (Value->precedence () > precedence ()) return Value->write (o << "(") << ")";
+            else return Value->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto v = Diophant::evaluate (Value, vars);
+            if (v.get () == nullptr) return expression::negate (v);
+            return !(*v);
+        };
     };
 
     struct plus : expression {
@@ -550,13 +644,20 @@ namespace Diophant {
             return 300;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " + ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a + b;
+        };
     };
 
     struct minus : expression {
@@ -568,13 +669,20 @@ namespace Diophant {
             return 400;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " - ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a - b;
+        };
     };
 
     struct times : expression {
@@ -586,13 +694,45 @@ namespace Diophant {
             return 500;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " * ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a * b;
+        };
+    };
+
+    struct power : expression {
+        value Left;
+        value Right;
+        power (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 550;
+        }
+
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
+            o << " ^ ";
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
+        }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a ^ b;
+        };
     };
 
     struct divide : expression {
@@ -604,13 +744,20 @@ namespace Diophant {
             return 600;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " / ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a / b;
+        };
     };
 
     struct equal : expression {
@@ -622,13 +769,20 @@ namespace Diophant {
             return 700;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " == ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a == b;
+        };
     };
 
     struct unequal : expression {
@@ -640,13 +794,20 @@ namespace Diophant {
             return 700;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " != ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a != b;
+        };
     };
 
     struct greater_equal : expression {
@@ -658,13 +819,20 @@ namespace Diophant {
             return 700;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " >= ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a >= b;
+        };
     };
 
     struct less_equal : expression {
@@ -676,13 +844,20 @@ namespace Diophant {
             return 700;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " <= ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a <= b;
+        };
     };
 
     struct greater : expression {
@@ -694,13 +869,20 @@ namespace Diophant {
             return 700;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " > ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a > b;
+        };
     };
 
     struct less : expression {
@@ -712,13 +894,20 @@ namespace Diophant {
             return 700;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " < ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a < b;
+        };
     };
 
     struct boolean_and : expression {
@@ -730,13 +919,20 @@ namespace Diophant {
             return 800;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " && ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a && b;
+        };
     };
 
     struct boolean_or : expression {
@@ -748,13 +944,20 @@ namespace Diophant {
             return 900;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " || ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a || b;
+        };
     };
 
     struct arrow : expression {
@@ -766,13 +969,20 @@ namespace Diophant {
             return 1000;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " -> ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return a->arrow (b);
+        };
     };
 
     struct intuitionistic_and : expression {
@@ -784,13 +994,20 @@ namespace Diophant {
             return 1100;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " & ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a & b;
+        };
     };
 
     struct intuitionistic_or : expression {
@@ -802,13 +1019,20 @@ namespace Diophant {
             return 1200;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " | ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return *a | b;
+        };
     };
 
     struct intuitionistic_implies : expression {
@@ -820,13 +1044,20 @@ namespace Diophant {
             return 1300;
         }
 
-        std::ostream &write (std::ostream &o) override {
-            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
-            else o << Left->write ();
+        std::ostream &write (std::ostream &o) const override {
+            if (Left->precedence () > precedence ()) Left->write (o << "(") << ")";
+            else Left->write (o);
             o << " => ";
-            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
-            else o << Right->write ();
+            if (Right->precedence () > precedence ()) return Right->write (o << "(") << ")";
+            else return Right->write (o);
         }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto a = Diophant::evaluate (Left, vars);
+            auto b = Diophant::evaluate (Right, vars);
+            if (a.get () == nullptr) return expression::apply (a, b);
+            return a->implies (b);
+        };
     };
 
     value inline expression::null () {
@@ -849,11 +1080,11 @@ namespace Diophant {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::string> (str));
     }
 
-    value inline expression::list (const data::list<value> ls) {
+    value inline expression::list (const data::list<value> &ls) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::list> (ls));
     }
 
-    value inline expression::object (const data::list<entry<data::string, value>> x) {
+    value inline expression::object (const data::list<entry<data::string, value>> &x) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::object> (x));
     }
 
@@ -861,80 +1092,160 @@ namespace Diophant {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::apply> (a, b));
     }
 
-    value inline expression::operator (const value x) const {
-        return apply (this, x);
+    value inline expression::operator () (const value x) const {
+        return apply (this->shared_from_this (), x);
     }
 
     value inline expression::negate (const value x) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::negate> (x));
     }
 
+    value inline expression::operator - () const {
+        return negate (this->shared_from_this ());
+    }
+
     value inline expression::plus (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::plus> (a, b));
+    }
+
+    value inline expression::operator + (const value v) const {
+        return plus (this->shared_from_this (), v);
     }
 
     value inline expression::minus (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::minus> (a, b));
     }
 
+    value inline expression::operator - (const value v) const {
+        return minus (this->shared_from_this (), v);
+    }
+
     value inline expression::times (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::times> (a, b));
+    }
+
+    value inline expression::operator * (const value v) const {
+        return times (this->shared_from_this (), v);
     }
 
     value inline expression::divide (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::divide> (a, b));
     }
 
+    value inline expression::operator / (const value v) const {
+        return divide (this->shared_from_this (), v);
+    }
+
+    value inline expression::power (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::power> (a, b));
+    }
+
+    value inline expression::operator ^ (const value v) const {
+        return power (this->shared_from_this (), v);
+    }
+
     value inline expression::equal (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::equal> (a, b));
+    }
+
+    value inline expression::operator == (const value v) const {
+        return equal (this->shared_from_this (), v);
     }
 
     value inline expression::unequal (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::unequal> (a, b));
     }
 
+    value inline expression::operator != (const value v) const {
+        return unequal (this->shared_from_this (), v);
+    }
+
     value inline expression::greater_equal (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::greater_equal> (a, b));
+    }
+
+    value inline expression::operator >= (const value v) const {
+        return greater_equal (this->shared_from_this (), v);
     }
 
     value inline expression::less_equal (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::less_equal> (a, b));
     }
 
+    value inline expression::operator <= (const value v) const {
+        return less_equal (this->shared_from_this (), v);
+    }
+
     value inline expression::greater (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::greater> (a, b));
+    }
+
+    value inline expression::operator > (const value v) const {
+        return greater (this->shared_from_this (), v);
     }
 
     value inline expression::less (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::less> (a, b));
     }
 
+    value inline expression::operator < (const value v) const {
+        return less (this->shared_from_this (), v);
+    }
+
     value inline expression::boolean_not (const value x) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::boolean_not> (x));
+    }
+
+    value inline expression::operator ! () const {
+        return boolean_not (this->shared_from_this ());
     }
 
     value inline expression::boolean_and (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::boolean_and> (a, b));
     }
 
+    value inline expression::operator && (const value v) const {
+        return boolean_and (this->shared_from_this (), v);
+    }
+
     value inline expression::boolean_or (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::boolean_or> (a, b));
+    }
+
+    value inline expression::operator || (const value v) const {
+        return boolean_or (this->shared_from_this (), v);
     }
 
     value inline expression::arrow (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::arrow> (a, b));
     }
 
+    value inline expression::arrow (const value v) const {
+        return arrow (this->shared_from_this (), v);
+    }
+
     value inline expression::intuitionistic_and (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::intuitionistic_and> (a, b));
+    }
+
+    value inline expression::operator & (const value v) const {
+        return intuitionistic_and (this->shared_from_this (), v);
     }
 
     value inline expression::intuitionistic_or (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::intuitionistic_or> (a, b));
     }
 
+    value inline expression::operator | (const value v) const {
+        return intuitionistic_or (this->shared_from_this (), v);
+    }
+
     value inline expression::intuitionistic_implies (const value a, const value b) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::intuitionistic_implies> (a, b));
+    }
+
+    value inline expression::implies (const value v) const {
+        return intuitionistic_implies (this->shared_from_this (), v);
     }
 
     value inline operator - (const value v) {
@@ -1071,19 +1382,6 @@ namespace Diophant {
         Stack = prepend (rest (rest (Stack)), val);
     }
 
-    value evaluate (const value v, const std::map<data::string, value> &vars) {
-        auto a = std::dynamic_pointer_cast<const symbol> (v);
-
-        if (a != nullptr) {
-            auto x = vars.find (a->Name);
-            if (x == vars.end ()) throw exception {} << "undefined symbol " << a->Name;
-
-            return evaluate (x->second, vars);
-        }
-
-        return v;
-    }
-
 }
 
 namespace Cosmos {
@@ -1119,25 +1417,4 @@ namespace Cosmos {
 
     }
 
-
-    std::ostream &write (std::ostream &o, const Diophant::value &v) {
-
-        if (v.get () == nullptr) return o << "null";
-
-        if (auto p = std::dynamic_pointer_cast<Diophant::boolean> (v)) return o << std::boolalpha << p->Value;
-
-        if (auto p = std::dynamic_pointer_cast<Diophant::symbol> (v)) return o << p->Name;
-
-        if (auto p = std::dynamic_pointer_cast<Diophant::string> (v)) return o << "\"" << p->Value << "\"";
-
-        if (auto p = std::dynamic_pointer_cast<Diophant::rational> (v)) return write (o, p->Value);
-
-        if (auto p = std::dynamic_pointer_cast<Diophant::list> (v)) return write (o, p->Value);
-
-        if (auto p = std::dynamic_pointer_cast<Diophant::object> (v)) return write (o, p->Value);
-
-        throw exception {} << "cannot display";
-
-        return o;
-    }
 }

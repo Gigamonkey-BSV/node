@@ -47,6 +47,10 @@ namespace calc {
 
     struct factor : opt<sor<number_lit, string_lit, symbol, parenthetical, list, map>, star<part>> {};
 
+    struct structure;
+    struct application : seq<plus<space>, structure> {};
+    struct structure : seq<factor, opt<application>> {};
+
     struct unary_operator : sor<one<'~'>, one<'+'>, one<'*'>> {};
 
     struct unary_expr;
@@ -56,16 +60,19 @@ namespace calc {
     struct unary_expr : sor<unary_op, factor> {};
 
     struct mul_expr;
+    struct pow_expr;
     struct div_expr;
     struct sub_expr;
     struct add_expr;
 
     struct mul_op : seq<ws, sor<one<'*'>, one<'%'>, one<'~'>>, ws, mul_expr> {};
+    struct pow_op : seq<ws, one<'^'>, ws, div_expr> {};
     struct div_op : seq<ws, one<'/'>, ws, div_expr> {};
     struct sub_op : seq<ws, one<'-'>, ws, sub_expr> {};
     struct add_op : seq<ws, one<'+'>, ws, add_expr> {};
 
     struct mul_expr : seq<unary_expr, opt<mul_op>> {};
+    struct pow_expr : seq<mul_expr, opt<pow_op>> {};
     struct div_expr : seq<mul_expr, opt<div_op>> {};
     struct sub_expr : seq<div_expr, opt<sub_op>> {};
     struct add_expr : seq<sub_expr, opt<add_op>> {};
@@ -91,14 +98,20 @@ namespace calc {
     struct bool_or_expr : seq<bool_and_expr, opt<bool_or_op>> {};
 
     struct arrow_expr;
-
     struct arrow_op : seq<ws, string<'-','>'>, arrow_expr> {};
-
     struct arrow_expr : seq<bool_or_expr, opt<arrow_op>> {};
 
-    struct intuitionistic_and_expr : seq<arrow_expr, opt<seq<ws, one<'^'>, ws, intuitionistic_and_expr>>> {};
-    struct intuitionistic_or_expr : seq<intuitionistic_and_expr, opt<seq<ws, one<'|'>, ws, intuitionistic_or_expr>>> {};
-    struct expression : seq<intuitionistic_or_expr, opt<seq<ws, string<'=','>'>, ws, expression>>> {};
+    struct intuitionistic_and_expr;
+    struct intuitionistic_or_expr;
+    struct expression;
+
+    struct intuitionistic_and_op : seq<ws, one<'&'>, ws, intuitionistic_and_expr> {};
+    struct intuitionistic_or_op : seq<ws, one<'|'>, ws, intuitionistic_or_expr> {};
+    struct intuitionistic_implies_op : seq<ws, string<'=','>'>, ws, expression> {};
+
+    struct intuitionistic_and_expr : seq<arrow_expr, opt<intuitionistic_and_op>> {};
+    struct intuitionistic_or_expr : seq<intuitionistic_and_expr, opt<intuitionistic_or_op>> {};
+    struct expression : seq<intuitionistic_or_expr, opt<intuitionistic_implies_op>> {};
 
     struct set : seq<one<'='>, ws, expression> {};
     struct infer : seq<string<':', '='>, ws, expression> {};

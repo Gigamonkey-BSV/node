@@ -26,15 +26,27 @@ namespace Diophant {
         static value list (const data::list<value> ls);
         static value object (const data::list<data::entry<data::string, value>> x);
 
+        static value apply (const value, const value);
+
         static value negate (const value);
         static value plus (const value, const value);
         static value minus (const value, const value);
         static value times (const value, const value);
+        static value power (const value, const value);
         static value divide (const value, const value);
+
+        static value equal (const value, const value);
+        static value unequal (const value, const value);
+        static value greater_equal (const value, const value);
+        static value less_equal (const value, const value);
+        static value greater (const value, const value);
+        static value less (const value, const value);
 
         static value boolean_not (const value);
         static value boolean_and (const value, const value);
         static value boolean_or (const value, const value);
+
+        static value arrow (const value, const value);
 
         static value intuitionistic_and (const value, const value);
         static value intuitionistic_or (const value, const value);
@@ -42,13 +54,25 @@ namespace Diophant {
 
         virtual ~expression () {};
 
+        virtual std::ostream &write (std::ostream &) const = 0;
+
+        virtual uint32 precedence () const {
+            return 0;
+        }
+
+        virtual value evaluate (const std::map<data::string, value> &vars) const {
+            return *this;
+        };
+
+        value virtual operator () const;
+
     };
 
-    value apply (const value, const value);
     value operator - (const value);
     value operator + (const value, const value);
     value operator - (const value, const value);
     value operator * (const value, const value);
+    value operator ^ (const value, const value);
     value operator / (const value, const value);
 
     value operator == (const value, const value);
@@ -62,8 +86,7 @@ namespace Diophant {
     value operator && (const value, const value);
     value operator || (const value, const value);
 
-    // look up values of symbols in the map of values.
-    value evaluate (const value, const std::map<data::string, value> &vars);
+    value evaluate (const value v, const std::map<data::string, value> &vars);
 
     struct evaluation {
         stack<value> Stack;
@@ -75,10 +98,17 @@ namespace Diophant {
         void read_string (const data::string &in);
         void read_number (const data::string &in);
 
+        void open_list ();
+        void open_object ();
+        void close_list ();
+        void close_object ();
+        void comma ();
+
         void apply ();
 
         void negate ();
         void mul ();
+        void pow ();
         void div ();
         void plus ();
         void minus ();
@@ -90,14 +120,15 @@ namespace Diophant {
         void greater ();
         void less ();
 
-        void bool_and ();
-        void bool_or ();
+        void boolean_not ();
+        void boolean_and ();
+        void boolean_or ();
 
-        void open_list ();
-        void open_object ();
-        void close_list ();
-        void close_object ();
-        void comma ();
+        void arrow ();
+
+        void intuitionistic_and ();
+        void intuitionistic_or ();
+        void intuitionistic_implies ();
 
         void set ();
     };
@@ -132,10 +163,17 @@ namespace Cosmos {
         }
     };
 
-    template <> struct eval_action<calc::unary_op> {
+    template <> struct eval_action<calc::negate_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.negate ();
+        }
+    };
+
+    template <> struct eval_action<calc::bool_not_op> {
+        template <typename Input>
+        static void apply (const Input& in, Diophant::evaluation &eval) {
+            eval.boolean_not ();
         }
     };
 
@@ -143,6 +181,13 @@ namespace Cosmos {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.mul ();
+        }
+    };
+
+    template <> struct eval_action<calc::pow_op> {
+        template <typename Input>
+        static void apply (const Input& in, Diophant::evaluation &eval) {
+            eval.pow ();
         }
     };
 
@@ -212,14 +257,42 @@ namespace Cosmos {
     template <> struct eval_action<calc::bool_and_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
-            eval.bool_and ();
+            eval.boolean_and ();
         }
     };
 
     template <> struct eval_action<calc::bool_or_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
-            eval.bool_or ();
+            eval.boolean_or ();
+        }
+    };
+
+    template <> struct eval_action<calc::arrow_op> {
+        template <typename Input>
+        static void apply (const Input& in, Diophant::evaluation &eval) {
+            eval.arrow ();
+        }
+    };
+
+    template <> struct eval_action<calc::intuitionistic_and_op> {
+        template <typename Input>
+        static void apply (const Input& in, Diophant::evaluation &eval) {
+            eval.intuitionistic_and ();
+        }
+    };
+
+    template <> struct eval_action<calc::intuitionistic_or_op> {
+        template <typename Input>
+        static void apply (const Input& in, Diophant::evaluation &eval) {
+            eval.intuitionistic_or ();
+        }
+    };
+
+    template <> struct eval_action<calc::intuitionistic_implies_op> {
+        template <typename Input>
+        static void apply (const Input& in, Diophant::evaluation &eval) {
+            eval.intuitionistic_implies ();
         }
     };
 
@@ -239,7 +312,7 @@ namespace Cosmos {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             if (data::size (eval.Stack) == 1) {
-                write (std::cout << "\n result: ", eval.Stack.first ()) << std::endl;
+                write (std::cout << "\n result: ", evaluate (eval.Stack.first (), eval.Vars)) << std::endl;
                 eval.Stack = data::stack<Diophant::value> {};
             }
         }
@@ -261,129 +334,499 @@ namespace Diophant {
     }
 
     void inline evaluation::apply () {
-        Stack = prepend (rest (rest (Stack)),
-           Diophant::apply (evaluate (first (rest (Stack)), Vars), evaluate (first (Stack), Vars)));
+        Stack = prepend (rest (rest (Stack)), expression::apply (first (rest (Stack)), first (Stack)));
     }
 
     void inline evaluation::negate () {
-        Stack = prepend (rest (Stack), -evaluate (first (Stack), Vars));
+        Stack = prepend (rest (Stack), expression::negate (first (Stack)));
+    }
+
+    void inline evaluation::boolean_not () {
+        Stack = prepend (rest (Stack), expression::boolean_not (first (Stack)));
     }
 
     void inline evaluation::mul () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) * evaluate (first (Stack), Vars));
+        Stack = prepend (rest (rest (Stack)), expression::times (first (rest (Stack)), first (Stack)));
     }
 
     void inline evaluation::div () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) / evaluate (first (Stack), Vars));
+        Stack = prepend (rest (rest (Stack)), expression::divide (first (rest (Stack)), first (Stack)));
     }
 
     void inline evaluation::plus () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) + evaluate (first (Stack), Vars));
+        Stack = prepend (rest (rest (Stack)), expression::plus (first (rest (Stack)), first (Stack)));
     }
 
     void inline evaluation::minus () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) - evaluate (first (Stack), Vars));
+        Stack = prepend (rest (rest (Stack)), expression::minus (first (rest (Stack)), first (Stack)));
     }
 
     void inline evaluation::equal () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) == evaluate (first (Stack), Vars));
+        Stack = prepend (rest (rest (Stack)), expression::equal (first (rest (Stack)), first (Stack)));
     }
 
     void inline evaluation::unequal () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) != evaluate (first (Stack), Vars));
+        Stack = prepend (rest (rest (Stack)), expression::unequal (first (rest (Stack)), first (Stack)));
     }
 
     void inline evaluation::greater_equal () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) >= evaluate (first (Stack), Vars));
+        Stack = prepend (rest (rest (Stack)), expression::greater_equal (first (rest (Stack)), first (Stack)));
     }
 
     void inline evaluation::less_equal () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) <= evaluate (first (Stack), Vars));
+        Stack = prepend (rest (rest (Stack)), expression::less_equal (first (rest (Stack)), first (Stack)));
     }
 
     void inline evaluation::greater () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) > evaluate (first (Stack), Vars));
+        Stack = prepend (rest (rest (Stack)), expression::greater (first (rest (Stack)), first (Stack)));
     }
 
     void inline evaluation::less () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) < evaluate (first (Stack), Vars));
+        Stack = prepend (rest (rest (Stack)), expression::less (first (rest (Stack)), first (Stack)));
     }
 
-    void inline evaluation::bool_and () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) && evaluate (first (Stack), Vars));
+    void inline evaluation::boolean_and () {
+        Stack = prepend (rest (rest (Stack)), expression::boolean_and (first (rest (Stack)), first (Stack)));
     }
 
-    void inline evaluation::bool_or () {
-        Stack = prepend (rest (rest (Stack)), evaluate (first (rest (Stack)), Vars) || evaluate (first (Stack), Vars));
+    void inline evaluation::boolean_or () {
+        Stack = prepend (rest (rest (Stack)), expression::boolean_or (first (rest (Stack)), first (Stack)));
+    }
+
+    void inline evaluation::arrow () {
+        Stack = prepend (rest (rest (Stack)), expression::arrow (first (rest (Stack)), first (Stack)));
+    }
+
+    void inline evaluation::intuitionistic_and () {
+        Stack = prepend (rest (rest (Stack)), expression::intuitionistic_and (first (rest (Stack)), first (Stack)));
+    }
+
+    void inline evaluation::intuitionistic_or () {
+        Stack = prepend (rest (rest (Stack)), expression::intuitionistic_or (first (rest (Stack)), first (Stack)));
+    }
+
+    void inline evaluation::intuitionistic_implies () {
+        Stack = prepend (rest (rest (Stack)), expression::intuitionistic_implies (first (rest (Stack)), first (Stack)));
+    }
+
+    value inline evaluate (const value v, const std::map<data::string, value> &vars) {
+        if (value == nullptr) return v;
+
+        return v->evaluate (vars);
     }
 
     struct boolean : expression {
         bool Value;
         boolean (const bool b) : Value {b} {}
+
+        std::ostream &write (std::ostream &o) override {
+            return << std::boolalpha << Value;
+        }
     };
 
     struct symbol : expression {
         data::string Name;
         symbol (const data::string &x) : Name {x} {}
+
+        std::ostream &write (std::ostream &o) override {
+            return << Name;
+        }
+
+        value evaluate (const std::map<data::string, value> &vars) const override {
+            auto x = vars.find (a->Name);
+            if (x == vars.end ()) throw exception {} << "undefined symbol " << a->Name;
+
+            return evaluate (x->second, vars);
+        };
     };
 
     struct string : expression {
         data::string Value;
         string (const data::string &x) : Value {x} {}
+
+        std::ostream &write (std::ostream &o) override {
+            return << "\"" << Value << "\"";
+        }
     };
 
     struct rational : expression {
         data::Q Value;
         rational (const data::Q &q) : Value {q} {}
+
+        std::ostream &write (std::ostream &o) override {
+            o << Value.Numerator;
+            if (Value.Denominator != 1) o << "/" << Value.Denominator;
+            return o;
+        }
     };
 
     struct list : expression {
         data::list<value> Value;
         list (data::list<value> v) : Value {v} {}
-    };
 
-    struct negate : expression {
-        value Value;
-    };
-
-    struct plus : expression {
-        value Left;
-        value Right;
-    };
-
-    struct minus : expression {
-        value Left;
-        value Right;
-    };
-
-    struct times : expression {
-        value Left;
-        value Right;
-    };
-
-    struct divide : expression {
-        value Left;
-        value Right;
-    };
-
-    struct intuitionistic_and : expression {
-        value Left;
-        value Right;
-    };
-
-    struct intuitionistic_or : expression {
-        value Left;
-        value Right;
-    };
-
-    struct intuitionistic_implies : expression {
-        value Left;
-        value Right;
+        std::ostream &write (std::ostream &o) override {
+            o << "[";
+            if (!data::empty (Value)) {
+                write (o, first (Value));
+                for (const auto v : Value) write (o << ", ", v);
+            }
+            return o << "]";
+        }
     };
 
     struct object : expression {
         data::list<entry<data::string, value>> Value;
         object (data::list<entry<data::string, value>> v) : Value {v} {}
+
+        std::ostream &write (std::ostream &o) override {
+            o << "{";
+            if (!data::empty (x)) {
+                auto e = first (x);
+                write (o << e.Key << ": ", e.Value);
+                for (const auto e : x) write (o << ", " << e.Key << ": ", e.Value);
+            }
+            return o << "}";
+        }
+    };
+
+    struct apply : expression {
+        value Left;
+        value Right;
+        apply (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 100;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct negate : expression {
+        value Value;
+        negate (const value &v) : Value {v} {}
+
+        uint32 precedence () const override {
+            return 200;
+        }
+
+        value evaluate (const std::map<data::string, value> &vars) const {
+            return -value->evaluate (vars);
+        };
+
+        std::ostream &write (std::ostream &o) override {
+            o << "-";
+            if (Value->precedence () > precedence ()) o << "(" << Value->write () << ")";
+            else o << Value->write ();
+        }
+    };
+
+    struct boolean_not : expression {
+        value Value;
+        boolean_not (const value &v) : Value {v} {}
+
+        uint32 precedence () const override {
+            return 200;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            o << "!";
+            if (Value->precedence () > precedence ()) o << "(" << Value->write () << ")";
+            else o << Value->write ();
+        }
+    };
+
+    struct plus : expression {
+        value Left;
+        value Right;
+        plus (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 300;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " + ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct minus : expression {
+        value Left;
+        value Right;
+        minus (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 400;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " - ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct times : expression {
+        value Left;
+        value Right;
+        times (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 500;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " * ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct divide : expression {
+        value Left;
+        value Right;
+        divide (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 600;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " / ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct equal : expression {
+        value Left;
+        value Right;
+        equal (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 700;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " == ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct unequal : expression {
+        value Left;
+        value Right;
+        unequal (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 700;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " != ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct greater_equal : expression {
+        value Left;
+        value Right;
+        greater_equal (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 700;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " >= ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct less_equal : expression {
+        value Left;
+        value Right;
+        less_equal (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 700;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " <= ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct greater : expression {
+        value Left;
+        value Right;
+        greater (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 700;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " > ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct less : expression {
+        value Left;
+        value Right;
+        less (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 700;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " < ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct boolean_and : expression {
+        value Left;
+        value Right;
+        boolean_and (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 800;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " && ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct boolean_or : expression {
+        value Left;
+        value Right;
+        boolean_or (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 900;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " || ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct arrow : expression {
+        value Left;
+        value Right;
+        arrow (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 1000;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " -> ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct intuitionistic_and : expression {
+        value Left;
+        value Right;
+        intuitionistic_and (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 1100;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " & ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct intuitionistic_or : expression {
+        value Left;
+        value Right;
+        intuitionistic_or (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 1200;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " | ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
+    };
+
+    struct intuitionistic_implies : expression {
+        value Left;
+        value Right;
+        intuitionistic_implies (const value &a, const value &b) : Left {a}, Right {b} {}
+
+        uint32 precedence () const override {
+            return 1300;
+        }
+
+        std::ostream &write (std::ostream &o) override {
+            if (Left->precedence () > precedence ()) o << "(" << Left->write () << ")";
+            else o << Left->write ();
+            o << " => ";
+            if (Right->precedence () > precedence ()) o << "(" << Right->write () << ")";
+            else o << Right->write ();
+        }
     };
 
     value inline expression::null () {
@@ -412,6 +855,86 @@ namespace Diophant {
 
     value inline expression::object (const data::list<entry<data::string, value>> x) {
         return std::static_pointer_cast<expression> (std::make_shared<Diophant::object> (x));
+    }
+
+    value inline expression::apply (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::apply> (a, b));
+    }
+
+    value inline expression::operator (const value x) const {
+        return apply (this, x);
+    }
+
+    value inline expression::negate (const value x) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::negate> (x));
+    }
+
+    value inline expression::plus (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::plus> (a, b));
+    }
+
+    value inline expression::minus (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::minus> (a, b));
+    }
+
+    value inline expression::times (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::times> (a, b));
+    }
+
+    value inline expression::divide (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::divide> (a, b));
+    }
+
+    value inline expression::equal (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::equal> (a, b));
+    }
+
+    value inline expression::unequal (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::unequal> (a, b));
+    }
+
+    value inline expression::greater_equal (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::greater_equal> (a, b));
+    }
+
+    value inline expression::less_equal (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::less_equal> (a, b));
+    }
+
+    value inline expression::greater (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::greater> (a, b));
+    }
+
+    value inline expression::less (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::less> (a, b));
+    }
+
+    value inline expression::boolean_not (const value x) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::boolean_not> (x));
+    }
+
+    value inline expression::boolean_and (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::boolean_and> (a, b));
+    }
+
+    value inline expression::boolean_or (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::boolean_or> (a, b));
+    }
+
+    value inline expression::arrow (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::arrow> (a, b));
+    }
+
+    value inline expression::intuitionistic_and (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::intuitionistic_and> (a, b));
+    }
+
+    value inline expression::intuitionistic_or (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::intuitionistic_or> (a, b));
+    }
+
+    value inline expression::intuitionistic_implies (const value a, const value b) {
+        return std::static_pointer_cast<expression> (std::make_shared<Diophant::intuitionistic_implies> (a, b));
     }
 
     value inline operator - (const value v) {
@@ -586,6 +1109,9 @@ namespace Cosmos {
                 tao::pegtl::memory_input<> input (input_str, "expression");
                 Diophant::evaluation eval {vars};
                 tao::pegtl::parse<calc::grammar, eval_action> (input, eval);
+
+
+
             } catch (const std::exception& ex) {
                 std::cerr << "Error: " << ex.what () << std::endl;
             }
@@ -593,30 +1119,6 @@ namespace Cosmos {
 
     }
 
-    std::ostream &write (std::ostream &o, const Q &q) {
-        o << q.Numerator;
-        if (q.Denominator != 1) o << "/" << q.Denominator;
-        return o;
-    }
-
-    std::ostream &write (std::ostream &o, const list<Diophant::value> &ls) {
-        o << "[";
-        if (!data::empty (ls)) {
-            write (o, first (ls));
-            for (const auto v : ls) write (o << ", ", v);
-        }
-        return o << "]";
-    }
-
-    std::ostream &write (std::ostream &o, const list<entry<string, Diophant::value>> &x) {
-        o << "{";
-        if (!data::empty (x)) {
-            auto e = first (x);
-            write (o << e.Key << ": ", e.Value);
-            for (const auto e : x) write (o << ", " << e.Key << ": ", e.Value);
-        }
-        return o << "}";
-    }
 
     std::ostream &write (std::ostream &o, const Diophant::value &v) {
 
@@ -633,6 +1135,8 @@ namespace Cosmos {
         if (auto p = std::dynamic_pointer_cast<Diophant::list> (v)) return write (o, p->Value);
 
         if (auto p = std::dynamic_pointer_cast<Diophant::object> (v)) return write (o, p->Value);
+
+        throw exception {} << "cannot display";
 
         return o;
     }

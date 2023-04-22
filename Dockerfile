@@ -4,15 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update
 
-RUN apt-get -y install python3-pip build-essential manpages-dev software-properties-common git cmake
-
-RUN add-apt-repository ppa:ubuntu-toolchain-r/test
-
-RUN apt-get update && apt-get -y install gcc-11 g++-11
-
-RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 20
-
-RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 20
+RUN apt-get -y install python3-pip build-essential manpages-dev software-properties-common git cmake libpqxx-dev
 
 RUN pip install conan
 
@@ -21,13 +13,7 @@ RUN pip install conan
 # In the standard library for accessing .env files.
 WORKDIR /home
 RUN rm -rf dotenv-cpp
-RUN git clone --depth 1 --branch master git@github.com:Gigamonkey-BSV/dotenv-cpp.git
-WORKDIR /home/dotenv-cpp
-RUN ls
-WORKDIR /home/dotenv-cpp/build
-RUN cmake .. -DCMAKE_BUILD_TYPE=Release
-RUN cmake --build .
-RUN cmake --install .
+RUN git clone --depth 1 --branch master git@github.com:laserpants/dotenv-cpp.git
 
 # pegtl parser library
 WORKDIR /home

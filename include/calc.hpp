@@ -9,7 +9,7 @@ namespace Cosmos {
     void calc ();
 }
 
-namespace calc {
+namespace Diophant::parse {
     using namespace tao::pegtl;
 
     struct ws : star<space> {};
@@ -27,7 +27,7 @@ namespace calc {
 
     struct string_lit : seq<
         one<'"'>,                                                     // opening "
-            string_body ,
+            string_body,
         one<'"'>> {};                                                 // closing "
 
     struct symbol : seq<sor<alpha, one<'_'>>, star<sor<alnum, one<'_'>>>> {};
@@ -36,20 +36,30 @@ namespace calc {
     struct close_paren : one<')'> {};
 
     struct expression;
+    struct type_expression;
 
-    struct parenthetical : seq<open_paren, ws, expression, ws, close_paren> {};
-    struct list : seq<one<'['>, ws, opt<seq<expression, ws, opt<star<seq<one<','>, ws, expression, ws>>>>>, one<']'>> {};
+    struct parenthetical : seq<open_paren, ws, 
+            expression, 
+            star<seq<ws, one<','>, ws, expression>>, ws, 
+        close_paren> {};
+        
+    struct list : seq<one<'['>, ws, 
+            opt<seq<expression, ws, opt<star<seq<one<','>, ws, expression, ws>>>>>, 
+        one<']'>> {};
+    
     struct map : seq<one<'{'>, ws, opt<
         seq<symbol, ws, one<':'>, ws, expression, ws, opt<star<
             seq<one<','>, ws, symbol, ws, one<':'>, expression, ws>>>>>, one<'}'>> {};
 
-    struct part : seq<one<'.'>, sor<number_lit, symbol>> {};
-
-    struct factor : opt<sor<number_lit, string_lit, symbol, parenthetical, list, map>, star<part>> {};
+    struct typed_input : seq<one<'.'>, ws, type_expression> {};
+    struct untyped_input : seq<one<';'>> {};
 
     struct structure;
-    struct application : seq<plus<space>, structure> {};
-    struct structure : seq<factor, opt<application>> {};
+    struct call : seq<plus<space>, structure> {};
+    struct part : seq<one<'@'>, sor<number_lit, symbol>> {};
+    struct structure : seq<sor<number_lit, string_lit, 
+        seq<symbol, typed_input, untyped_input>, 
+        parenthetical, list, map>, star<part>, star<call>> {};
 
     struct unary_operator : sor<one<'~'>, one<'+'>, one<'*'>> {};
 
@@ -57,7 +67,7 @@ namespace calc {
     struct negate_op : seq<one<'-'>, ws, unary_expr> {};
     struct bool_not_op : seq<one<'!'>, ws, unary_expr> {};
     struct unary_op : sor<negate_op, bool_not_op, seq<unary_operator, ws, unary_expr>> {};
-    struct unary_expr : sor<unary_op, factor> {};
+    struct unary_expr : sor<unary_op, structure> {};
 
     struct mul_expr;
     struct pow_expr;
@@ -73,7 +83,7 @@ namespace calc {
 
     struct mul_expr : seq<unary_expr, opt<mul_op>> {};
     struct pow_expr : seq<mul_expr, opt<pow_op>> {};
-    struct div_expr : seq<mul_expr, opt<div_op>> {};
+    struct div_expr : seq<pow_expr, opt<div_op>> {};
     struct sub_expr : seq<div_expr, opt<sub_op>> {};
     struct add_expr : seq<sub_expr, opt<add_op>> {};
 
@@ -86,7 +96,8 @@ namespace calc {
     struct greater_op : seq<ws, one<'>'>, ws, comp_expr> {};
     struct less_op : seq<ws, one<'<'>, ws, comp_expr> {};
 
-    struct comp_expr : seq<add_expr, opt<sor<equal_op, unequal_op, greater_equal_op, less_equal_op, greater_op, less_op>>> {};
+    struct comp_expr : seq<add_expr, 
+        opt<sor<equal_op, unequal_op, greater_equal_op, less_equal_op, greater_op, less_op>>> {};
 
     struct bool_and_expr;
     struct bool_or_expr;
@@ -97,22 +108,21 @@ namespace calc {
     struct bool_and_expr : seq<comp_expr, opt<bool_and_op>> {};
     struct bool_or_expr : seq<bool_and_expr, opt<bool_or_op>> {};
 
-    struct arrow_expr;
-    struct arrow_op : seq<ws, string<'-','>'>, arrow_expr> {};
-    struct arrow_expr : seq<bool_or_expr, opt<arrow_op>> {};
+    struct arrow_op : seq<ws, one<'-','>'>, expression> {};
+    struct expression : seq<bool_or_expr, opt<arrow_op>> {};
 
     struct intuitionistic_and_expr;
     struct intuitionistic_or_expr;
-    struct expression;
+    struct type_expression;
 
     struct intuitionistic_and_op : seq<ws, one<'&'>, ws, intuitionistic_and_expr> {};
     struct intuitionistic_or_op : seq<ws, one<'|'>, ws, intuitionistic_or_expr> {};
     struct intuitionistic_implies_op : seq<ws, string<'=','>'>, ws, expression> {};
 
-    struct intuitionistic_and_expr : seq<arrow_expr, opt<intuitionistic_and_op>> {};
+    struct intuitionistic_and_expr : seq<expression, opt<intuitionistic_and_op>> {};
     struct intuitionistic_or_expr : seq<intuitionistic_and_expr, opt<intuitionistic_or_op>> {};
-    struct expression : seq<intuitionistic_or_expr, opt<intuitionistic_implies_op>> {};
-
+    struct type_expression : seq<intuitionistic_or_expr, opt<intuitionistic_implies_op>> {};
+    
     struct set : seq<one<'='>, ws, expression> {};
     struct infer : seq<string<':', '='>, ws, expression> {};
     struct declare : seq<one<':'>, ws, expression, opt<set>> {};

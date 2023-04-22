@@ -1,10 +1,7 @@
 #ifndef NODE_DATABASE
 #define NODE_DATABASE
 
-//#include <soci/soci.h>
-//#include <soci/postgresql/soci-postgresql.h>
-
-//#include <pqxx/pqxx>
+#include <pqxx/pqxx>
 #include "types.hpp"
 
 namespace Cosmos {
@@ -16,10 +13,10 @@ namespace Cosmos {
             return net::URL::valid () && this->protocol () == net::protocol {"postgres"} && this->user_name_pass ();
         }
 
-        data::string connect () const;
+        data::string connect_command () const;
     };
 
-    //ptr<pqxx::connection> connect_to_database (const postgres_URL &);
+    ptr<pqxx::connection> connect_to_database (const postgres_URL &);
 
 }
 

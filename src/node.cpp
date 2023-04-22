@@ -55,18 +55,15 @@ namespace Cosmos {
         if (opts.DatabaseURL) {
 
             std::cout << "database url: " << *opts.DatabaseURL << std::endl;
-
-            std::cout << "there is no database library yet, but if there was we would try to connect with the string "
-                << opts.DatabaseURL->connect () << std::endl;
-            /*
+            
             ptr<pqxx::connection> connection = connect_to_database (*opts.DatabaseURL);
 
             if (connection->is_open ()) {
                 std::cout << "Connected to the database!" << std::endl;
-                connection->close ();
+                //connection->close ();
             } else {
                 std::cout << "Cannot connect to the database." << std::endl;
-            }*/
+            }
         }
 
         calc ();

@@ -150,179 +150,179 @@ namespace Diophant {
     };
 }
 
-namespace Cosmos {
+namespace Diophant {
 
     namespace pegtl = tao::pegtl;
 
     template <typename Rule> struct eval_action : pegtl::nothing<Rule> {};
 
-    template <> struct eval_action<calc::number_lit> {
+    template <> struct eval_action<parse::number_lit> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.read_number (in.string ());
         }
     };
 
-    template <> struct eval_action<calc::string_body> {
+    template <> struct eval_action<parse::string_body> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.read_string (in.string ());
         }
     };
 
-    template <> struct eval_action<calc::symbol> {
+    template <> struct eval_action<parse::symbol> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.read_symbol (in.string ());
         }
     };
 
-    template <> struct eval_action<calc::negate_op> {
+    template <> struct eval_action<parse::negate_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.negate ();
         }
     };
 
-    template <> struct eval_action<calc::bool_not_op> {
+    template <> struct eval_action<parse::bool_not_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.boolean_not ();
         }
     };
 
-    template <> struct eval_action<calc::mul_op> {
+    template <> struct eval_action<parse::mul_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.mul ();
         }
     };
 
-    template <> struct eval_action<calc::pow_op> {
+    template <> struct eval_action<parse::pow_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.pow ();
         }
     };
 
-    template <> struct eval_action<calc::div_op> {
+    template <> struct eval_action<parse::div_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.div ();
         }
     };
 
-    template <> struct eval_action<calc::add_op> {
+    template <> struct eval_action<parse::add_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.plus ();
         }
     };
 
-    template <> struct eval_action<calc::sub_op> {
+    template <> struct eval_action<parse::sub_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.minus ();
         }
     };
 
-    template <> struct eval_action<calc::equal_op> {
+    template <> struct eval_action<parse::equal_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.equal ();
         }
     };
 
-    template <> struct eval_action<calc::unequal_op> {
+    template <> struct eval_action<parse::unequal_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.unequal ();
         }
     };
 
-    template <> struct eval_action<calc::greater_equal_op> {
+    template <> struct eval_action<parse::greater_equal_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.greater_equal ();
         }
     };
 
-    template <> struct eval_action<calc::less_equal_op> {
+    template <> struct eval_action<parse::less_equal_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.less_equal ();
         }
     };
 
-    template <> struct eval_action<calc::less_op> {
+    template <> struct eval_action<parse::less_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.less ();
         }
     };
 
-    template <> struct eval_action<calc::greater_op> {
+    template <> struct eval_action<parse::greater_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.greater ();
         }
     };
 
-    template <> struct eval_action<calc::bool_and_op> {
+    template <> struct eval_action<parse::bool_and_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.boolean_and ();
         }
     };
 
-    template <> struct eval_action<calc::bool_or_op> {
+    template <> struct eval_action<parse::bool_or_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.boolean_or ();
         }
     };
 
-    template <> struct eval_action<calc::arrow_op> {
+    template <> struct eval_action<parse::arrow_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.arrow ();
         }
     };
 
-    template <> struct eval_action<calc::intuitionistic_and_op> {
+    template <> struct eval_action<parse::intuitionistic_and_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.intuitionistic_and ();
         }
     };
 
-    template <> struct eval_action<calc::intuitionistic_or_op> {
+    template <> struct eval_action<parse::intuitionistic_or_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.intuitionistic_or ();
         }
     };
 
-    template <> struct eval_action<calc::intuitionistic_implies_op> {
+    template <> struct eval_action<parse::intuitionistic_implies_op> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.intuitionistic_implies ();
         }
     };
 
-    template <> struct eval_action<calc::expression> {
+    template <> struct eval_action<parse::expression> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {}
     };
 
-    template <> struct eval_action<calc::infer> {
+    template <> struct eval_action<parse::infer> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             eval.set ();
         }
     };
 
-    template <> struct eval_action<calc::statement> {
+    template <> struct eval_action<parse::statement> {
         template <typename Input>
         static void apply (const Input& in, Diophant::evaluation &eval) {
             if (data::size (eval.Stack) == 1) {
@@ -1406,7 +1406,7 @@ namespace Cosmos {
             try {
                 tao::pegtl::memory_input<> input (input_str, "expression");
                 Diophant::evaluation eval {vars};
-                tao::pegtl::parse<calc::grammar, eval_action> (input, eval);
+                tao::pegtl::parse<Diophant::parse::grammar, Diophant::eval_action> (input, eval);
 
 
 

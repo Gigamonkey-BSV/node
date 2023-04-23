@@ -14,7 +14,15 @@ class DiophantConan(ConanFile):
     options = {"shared": [True, False], "fPIC": [True, False]}
     default_options = {"shared": False, "fPIC": True}
     exports_sources = "src/*"
-    requires = "argh/1.3.2", "gtest/1.12.1", "boost/1.80.0", "gmp/6.2.1", "data/v0.0.25@proofofwork/stable"
+    requires = [
+        "argh/1.3.2",
+        "openssl/1.1.1t",
+        "boost/1.80.0",
+        "gmp/6.2.1",
+        "libpqxx/7.7.5",
+        "taocpp-pegtl/3.2.7",
+        "data/v0.0.25@proofofwork/unstable",
+        "gtest/1.12.1"]
 
     def set_version (self):
         if "CIRCLE_TAG" in environ:
@@ -22,7 +30,7 @@ class DiophantConan(ConanFile):
         if "CURRENT_VERSION" in environ:
             self.version = environ['CURRENT_VERSION']
         else:
-            self.version = "v0.0.13"
+            self.version = "0.0"
 
     def config_options (self):
         if self.settings.os == "Windows":
